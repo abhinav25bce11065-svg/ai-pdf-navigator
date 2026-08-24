@@ -45,22 +45,53 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Main Hero Header Title Block
-st.markdown('# 📄 AI PDF Assistant Pro')
-st.markdown('<p style="color: #6B7280; font-size: 1.05rem; margin-top: -12px;">An elegant, high-fidelity RAG tool optimized for rapid document navigation.</p>', unsafe_allow_html=True)
-st.divider()
-
-# Initialize dynamic stream storage arrays for clean thread handling
+# ----------------- SESSION STATE HISTORY ARCHITECTURE ----------------- #
+# Initialize all storage blocks if running a fresh session loop
+if "all_chats" not in st.session_state:
+    st.session_state.all_chats = {}  # Format: { "Conversation Title": [messages] }
+if "current_chat" not in st.session_state:
+    st.session_state.current_chat = "Chat 1"
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# 1. Look for API key automatically in Local Environment or Cloud Secrets
-api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
+# Synchronize standard layout references dynamically
+st.session_state.all_chats[st.session_state.current_chat] = st.session_state.chat_history
+# ---------------------------------------------------------------------- #
 
-# 2. Only build the sidebar input box if the API key isn't found automatically
-if not api_key:
-    with st.sidebar:
-        st.header("Configuration")
+# Sidebar Navigation Architecture
+with st.sidebar:
+    st.title("⚙️ Workspace")
+    
+    # ➕ New Chat Action Component
+    if st.button("➕ New Chat", use_container_width=True):
+        new_id = f"Chat {len(st.session_state.all_chats) + 1}"
+        st.session_state.all_chats[new_id] = []
+        st.session_state.current_chat = new_id
+        st.session_state.chat_history = []
+        # Reset cached processing models to ensure the fresh document cycle fires correctly
+        if "rag_chain" in st.session_state:
+            del st.session_state.rag_chain
+        st.rerun()
+        
+    st.divider()
+    st.subheader("📜 Saved Dialogues")
+    
+    # Render past conversations list interactively
+    for chat_title in list(st.session_state.all_chats.keys()):
+        # Highlight current active thread with a slight visual label variation
+        button_label = f"💬 {chat_title}" if chat_title != st.session_state.current_chat else f"🔥 {chat_title} (Active)"
+        if st.button(button_label, key=f"nav_{chat_title}", use_container_width=True):
+            st.session_state.current_chat = chat_title
+            st.session_state.chat_history = st.session_state.all_chats[chat_title]
+            st.rerun()
+
+    st.divider()
+    st.header("Configuration")
+    # 1. Look for API key automatically in Local Environment or Cloud Secrets
+    api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
+
+    # 2. Only build the sidebar input box if the API key isn't found automatically
+    if not api_key:
         api_key = st.text_input(
             "Enter Google Gemini API Key:",
             type="password"
@@ -73,6 +104,11 @@ if not api_key:
 
 # Set key to environment for downstream components
 os.environ["GOOGLE_API_KEY"] = api_key
+
+# Main Hero Header Title Block
+st.markdown('# 📄 AI PDF Assistant Pro')
+st.markdown(f'<p style="color: #4F46E5; font-size: 1.05rem; margin-top: -12px; font-weight:600;">Active Thread: {st.session_state.current_chat}</p>', unsafe_allow_html=True)
+st.divider()
 
 # Split UI architecture into a professional horizontal grid dashboard layout
 col1, col2 = st.columns([1, 1.2], gap="large")
@@ -188,6 +224,10 @@ Context:
                 
                 # Commit AI answer to active thread memory logs
                 st.session_state.chat_history.append({"role": "assistant", "content": response_text})
+                
+                # Force state update back into global map tracking configurations
+                st.session_state.all_chats[st.session_state.current_chat] = st.session_state.chat_history
+                st.rerun()
 
     except Exception as e:
         st.error(f"Error: {str(e)}")
