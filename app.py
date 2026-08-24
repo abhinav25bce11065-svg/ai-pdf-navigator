@@ -17,17 +17,24 @@ from langchain_core.prompts import ChatPromptTemplate
 st.set_page_config(page_title="AI PDF Assistant", layout="wide")
 st.title("📄 AI PDF Assistant")
 
-with st.sidebar:
-    st.header("Configuration")
-    api_key = st.text_input(
-        "Enter Google Gemini API Key:",
-        type="password"
-    )
+# 1. Look for API key automatically in Local Environment or Cloud Secrets
+api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
+# 2. Only build the sidebar input box if the API key isn't found automatically
 if not api_key:
-    st.warning("Please enter your Gemini API key.")
+    with st.sidebar:
+        st.header("Configuration")
+        api_key = st.text_input(
+            "Enter Google Gemini API Key:",
+            type="password"
+        )
+
+# 3. Halt the application if no key is provided anywhere
+if not api_key:
+    st.warning("Please enter your Gemini API key in the sidebar.")
     st.stop()
 
+# Set key to environment for downstream components
 os.environ["GOOGLE_API_KEY"] = api_key
 
 uploaded_file = st.file_uploader(
@@ -73,7 +80,6 @@ if uploaded_file is not None:
                 temperature=0.2
             )
             
-
             prompt = ChatPromptTemplate.from_messages(
                 [
                     (
